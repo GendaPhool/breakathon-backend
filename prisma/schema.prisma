@@ -1,0 +1,135 @@
+// ============================================================
+// prisma/schema.prisma
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Enums
+// ============================================================
+
+enum Role {
+  MARSHAL
+  PARTICIPANT
+}
+
+enum BugStatus {
+  PENDING_REVIEW
+  VALIDATED
+  REJECTED
+  NEEDS_MORE_INFO
+  DUPLICATE
+}
+
+enum BugSeverity {
+  LAUNCH_BLOCKER
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum BugCategory {
+  CUSTOMER_APP
+  ADMIN_DASHBOARD
+  DELIVERY_PARTNER_APP
+  PRODUCTION_DASHBOARD
+  ROUTE_MANAGEMENT
+  SUBSCRIPTION_MANAGEMENT
+  PAYMENT_SYSTEM
+  WALLET_SYSTEM
+  NOTIFICATION_SYSTEM
+}
+
+enum PaymentStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
+}
+
+// ============================================================
+// Models
+// ============================================================
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  passwordHash  String
+  role          Role     @default(PARTICIPANT)
+  full_name     String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Registration {
+  id                 String        @id @default(cuid())
+  name               String
+  email              String        @unique
+  phone              String
+  city               String
+  occupation         String
+  how_did_you_hear   String
+  payment_reference  String
+  payment_status     PaymentStatus @default(PENDING_VERIFICATION)
+  checked_in         Boolean       @default(false)
+  checked_in_at      DateTime?
+  participant_id     String?
+  badge_printed      Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@map("registrations")
+}
+
+model BugReport {
+  id                      String      @id @default(cuid())
+  module                  BugCategory
+  bug_title               String
+  steps_to_reproduce      String
+  expected_behavior       String
+  actual_behavior         String
+  screenshot_url          String
+  screen_recording_url    String?
+  status                  BugStatus   @default(PENDING_REVIEW)
+  severity                BugSeverity?
+  points_awarded          Float       @default(0)
+  marshal_notes           String?
+  duplicate_of            String?
+  is_confirming_duplicate Boolean     @default(false)
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+
+  // participant_id is a free-form string (e.g. "PT-001") from the
+  // Registration.participant_id field — NOT a User.id FK.
+  participant_id   String
+  participant_name String
+
+  @@map("bug_reports")
+}
+
+model EventSettings {
+  id                String   @id @default(cuid())
+  event_name        String   @default("Genda Phool Break-A-Thon")
+  event_date        String?
+  event_time        String?
+  venue             String?
+  upi_id            String?
+  upi_qr_url        String?
+  registration_open Boolean  @default(true)
+  event_started     Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("event_settings")
+}
