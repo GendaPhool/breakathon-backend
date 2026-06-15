@@ -53,7 +53,7 @@ const registrationRoutes  = require("./modules/registrations/registrations.route
 const eventSettingsRoutes = require("./modules/eventsettings/eventsettings.routes");
 const uploadRoutes        = require("./modules/upload/upload.routes");
 const razorpayRoutes      = require("./modules/razorpay/razorpay.routes");
-const base44Router        = require("./routes/base44Router");
+const appRouter        = require("./routes/appRouter");
 const { getSettings }     = require("./modules/eventsettings/eventsettings.controller");
 
 // Existing /api/v1 routes — kept intact
@@ -64,7 +64,7 @@ app.use("/api/v1/settings",      eventSettingsRoutes);
 app.use("/api/v1/upload",        uploadRoutes);
 app.use("/api/v1/payment",       razorpayRoutes);
 
-// ── Base44 SDK: static public route ──────────────────────────
+// ── Static public route ──────────────────────────
 // MUST be registered BEFORE the dynamic /api/apps/:appId mount.
 // AuthContext calls this before it knows the appId, so Express
 // would treat "public" as the :appId param and miss it otherwise.
@@ -72,8 +72,17 @@ app.use("/api/v1/payment",       razorpayRoutes);
 // GET /api/apps/public/prod/public-settings/by-id/:appId
 app.get("/api/apps/public/prod/public-settings/by-id/:appId", getSettings);
 
-// Base44 SDK adapter — handles /api/apps/:appId/* from the frontend
-app.use("/api/apps/:appId", base44Router);
+// Frontend API adapter — handles /api/apps/:appId/* from the frontend
+// Mounted three times under different namespaces:
+//   /api/apps/:appId           — legacy/default (kept for backward compatibility)
+//   /api/apps/:appId/user      — participant-facing namespace
+//   /api/apps/:appId/admin     — marshal-facing namespace
+// All three serve the exact same routes/handlers — each route already
+// enforces its own auth (public, soft-auth, or authenticate+requireMarshal),
+// so namespacing here is purely for clearer, separable URLs per audience.
+app.use("/api/apps/:appId/user",  appRouter);
+app.use("/api/apps/:appId/admin", appRouter);
+app.use("/api/apps/:appId",       appRouter);
 
 // ── Error Handlers (must be last) ────────────────────────────
 app.use(notFoundHandler);

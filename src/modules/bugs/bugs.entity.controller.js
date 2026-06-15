@@ -1,12 +1,12 @@
 // ============================================================
 // src/modules/bugs/bugs.entity.controller.js
 //
-// Base44 SDK adapter for BugReport entity.
-// The frontend (base44 SDK) uses human-readable enum values and
+// Custom adapter for BugReport entity.
+// The frontend (apiClient) uses human-readable enum values and
 // a "created_date" field; the DB stores SCREAMING_SNAKE_CASE enums
 // and "createdAt". This layer translates both directions.
 //
-// Endpoints wired in base44Router.js:
+// Endpoints wired in appRouter.js:
 //   GET    /entities/BugReport           → list / filter
 //   POST   /entities/BugReport           → create
 //   PUT    /entities/BugReport/:id       → update (full)
@@ -153,7 +153,7 @@ const bugSelect = {
 //   ?sort=<string>    — e.g. "-created_date"
 //   ?limit=<number>
 //
-// Auth: authenticate middleware runs before this handler (wired in base44Router).
+// Auth: authenticate middleware runs before this handler (wired in appRouter).
 // Role enforcement:
 //   - MARSHAL → can see all bug reports and filter freely
 //   - PARTICIPANT → can only see their own reports (filtered by participant_id

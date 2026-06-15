@@ -1,7 +1,7 @@
 // ============================================================
 // src/modules/registrations/registrations.public.service.js
 // Handles only public (unauthenticated) registration operations
-// needed by the Base44 adapter layer.
+// needed by the entity adapter layer.
 // ============================================================
 
 const prisma = require("../../config/db");
@@ -26,7 +26,7 @@ const regSelect = {
 
 /**
  * Filter registrations by a single field:value pair.
- * The frontend calls: base44.entities.Registration.filter({ email })
+ * The frontend calls: apiClient.entities.Registration.filter({ email })
  * which maps to GET /entities/Registration?filter[email]=...
  */
 const filterRegistrations = async (filterParams = {}) => {

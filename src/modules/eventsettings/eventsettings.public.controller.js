@@ -1,6 +1,6 @@
 // ============================================================
 // src/modules/eventsettings/eventsettings.public.controller.js
-// Handles Base44-style entity list for EventSettings (public).
+// Handles custom entity list for EventSettings (public).
 // ============================================================
 
 const { sendSuccess } = require("../../utils/apiResponse");
@@ -8,12 +8,12 @@ const { getSettings } = require("./eventsettings.service");
 
 /**
  * GET /api/apps/:appId/entities/EventSettings
- * Frontend: base44.entities.EventSettings.list()
- * Returns an array (Base44 list convention); frontend picks [0].
+ * Frontend: apiClient.entities.EventSettings.list()
+ * Returns an array (list convention); frontend picks [0].
  */
 const listEventSettings = async (_req, res) => {
   const settings = await getSettings();
-  // Wrap in array to match Base44 .list() expectation
+  // Wrap in array to match .list() response expectation
   return sendSuccess(res, "Event settings fetched.", settings ? [settings] : []);
 };
 

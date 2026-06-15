@@ -1,9 +1,9 @@
 // ============================================================
-// src/routes/base44Router.js
-// Adapter layer — maps Base44 SDK URL patterns to existing handlers.
+// src/routes/appRouter.js
+// Adapter layer — maps the frontend apiClient URL patterns to existing handlers.
 // Frontend calls: /api/apps/:appId/auth/*, /api/apps/:appId/entities/*, etc.
 //
-// RESPONSE SHAPE RULES (Base44 SDK expectations):
+// RESPONSE SHAPE RULES (frontend apiClient expectations):
 //   .list() / .filter()  → expects a raw JSON array:  [...]
 //   .create()            → expects the created object: {...}
 //   .update()            → expects the updated object: {...}
@@ -61,7 +61,18 @@ const {
 } = require("../modules/bugs/bugs.validation");
 
 // ── Email ─────────────────────────────────────────────────────
-const { sendRegistrationConfirmation } = require("../modules/email/email.service");
+const { sendRegistrationConfirmation, sendVerificationApprovedEmail } = require("../modules/email/email.service");
+
+// ── Rate Limiting ─────────────────────────────────────────────
+const rateLimit = require("express-rate-limit");
+
+const uploadRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30,                   // max 30 uploads per IP per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Too many file uploads. Please try again later.", data: null },
+});
 
 // ── Upload ────────────────────────────────────────────────────
 const multer = require("multer");
@@ -118,6 +129,88 @@ const softAuth = async (req) => {
 router.post("/auth/login", validateBodyZod(loginSchema), async (req, res, next) => {
   try {
     const { user, token } = await authService.loginUser(req.body);
+    return res.status(200).json({ access_token: token, user });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================
+// USER (participant) ROUTES — /user/*
+// =============================================================
+// POST /user/login — participant sign-in via email + phone (no JWT issued;
+// frontend stores the returned participant_id/name in bat_participant_session).
+router.post("/user/login", async (req, res, next) => {
+  try {
+    const email = (req.body.email || "").toLowerCase().trim();
+    const phone = (req.body.phone || "").replace(/\s/g, "").trim();
+
+    if (!email || !phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and phone number are required.",
+        data: null,
+      });
+    }
+
+    const reg = await prisma.registration.findFirst({
+      where: { email, phone },
+      select: regSelect,
+    });
+
+    if (!reg) {
+      return res.status(401).json({
+        success: false,
+        message: "Email or phone is incorrect. Check your details or speak to a Marshal.",
+        data: null,
+      });
+    }
+
+    if (reg.payment_status !== "VERIFIED") {
+      return res.status(403).json({
+        success: false,
+        message: "Your registration is still pending verification by our team. You'll receive an email once it's approved — please check back after that.",
+        data: null,
+      });
+    }
+
+    if (!reg.checked_in) {
+      return res.status(403).json({
+        success: false,
+        message: "You haven't been checked in yet. Please visit the registration desk.",
+        data: null,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Login successful.",
+      data: {
+        participant_id:  reg.participant_id,
+        name:            reg.name,
+        registration_id: reg.id,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================
+// ADMIN (marshal) ROUTES — /admin/*
+// =============================================================
+// POST /admin/login — marshal sign-in (issues JWT, same as /auth/login)
+router.post("/admin/login", validateBodyZod(loginSchema), async (req, res, next) => {
+  try {
+    const { user, token } = await authService.loginUser(req.body);
+    // shapeUser() in auth.service.js lowercases role → compare lowercase
+    if (user.role?.toLowerCase() !== "marshal") {
+      return res.status(403).json({
+        success: false,
+        message: "This login is for marshals only.",
+        data: null,
+      });
+    }
     return res.status(200).json({ access_token: token, user });
   } catch (err) {
     next(err);
@@ -292,17 +385,10 @@ const regSelect = {
   participant_id: true, badge_printed: true, createdAt: true, updatedAt: true,
 };
 
-// LIST / FILTER — handles both .list(sort, limit) and .filter({ email, phone })
-// The Base44 SDK's entities.X.filter(query, ...) ALWAYS sends ?q=<JSON> —
-// never ?filters= or ?filter[x]=. (Verified directly in @base44/sdk source.)
-//
-// ⚠️  Medium Issue #6 (from audit): This route is intentionally unauthenticated
-// because ParticipantGate.jsx needs it before a participant has a JWT. However,
-// it returns PII (name, email, phone, city, payment_reference) for all rows when
-// called without a ?q filter. Mitigate at the infrastructure level (firewall /
-// reverse-proxy) to restrict calls from public internet if possible, or add
-// network-layer rate-limiting. Tightening it in code would require frontend changes.
-router.get("/entities/Registration", async (req, res, next) => {
+// LIST / FILTER — marshal-only; MarshalRegistrations and MarshalCheckin both send JWT.
+// Participant login now uses POST /user/login (email+phone), not this endpoint,
+// so it is safe to require marshal auth here and close the PII exposure.
+router.get("/entities/Registration", authenticate, requireMarshal(), async (req, res, next) => {
   try {
     const { q, sort, limit = 500 } = req.query;
     const where = {};
@@ -388,6 +474,16 @@ const handleRegistrationUpdate = async (req, res, next) => {
       select: regSelect,
     });
 
+    if (data.payment_status === "VERIFIED") {
+      sendVerificationApprovedEmail({
+        name: row.name,
+        email: row.email,
+        participant_id: row.participant_id,
+      }).catch((err) =>
+        console.error("[email] sendVerificationApprovedEmail error:", err.message)
+      );
+    }
+
     return res.status(200).json(regToFrontend(row));
   } catch (err) {
     next(err);
@@ -405,17 +501,24 @@ router.patch( "/entities/Registration/:id", authenticate, requireMarshal(), hand
 //   GET  list/single — authenticate (participants see own bugs; marshals see all)
 //                      softAuth is used so anonymous callers get [] rather than 401,
 //                      but participant filtering is enforced in the controller.
-//   POST create       — authenticate + Zod validation + participant_id ↔ Registration check
+//   POST create       — PUBLIC (participants have no JWT, only bat_participant_session).
+//                      participant_id is validated against a checked-in Registration instead.
 //   PUT/PATCH update  — authenticate + requireMarshal() (only marshals may update status/severity/points)
 // =============================================================
 
-// LIST — participants see only their own; marshals see all
-router.get("/entities/BugReport", authenticate, listBugReports);
+// LIST — public + participants (no JWT) + marshals (JWT)
+// softAuth: returns the decoded user if token present, null otherwise — never throws.
+// listBugReports already handles req.user === null: skips role filter and uses ?q params.
+// This keeps the leaderboard (public), MyReports (participant session, no JWT), and
+// DuplicateAwarenessList accessible without a JWT while still giving marshals full access.
+router.get("/entities/BugReport", async (req, res, next) => {
+  req.user = await softAuth(req);
+  return listBugReports(req, res, next);
+});
 
-// CREATE — authenticated participant; validates participant_id against a checked-in Registration
+// CREATE — public (participant_id validated against a checked-in Registration below)
 router.post(
   "/entities/BugReport",
-  authenticate,
   validateBodyZod(createBugSchema),
   async (req, res, next) => {
     try {
@@ -468,6 +571,7 @@ router.post("/analytics/track/batch", (_req, res) =>
 
 router.post(
   "/integrations/Core/UploadFile",
+  uploadRateLimit,
   upload.single("file"),
   (req, res) => {
     if (!req.file) {

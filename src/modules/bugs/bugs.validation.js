@@ -32,9 +32,23 @@ const BugSeverity = z.enum([
   "LOW",
 ]);
 
+// Human-readable module values as sent by the frontend (converted to DB
+// enum values by toDb() in bugs.entity.controller.js, AFTER this validation runs).
+const BugCategoryLabel = z.enum([
+  "Customer App",
+  "Admin Dashboard",
+  "Delivery Partner App",
+  "Production Dashboard",
+  "Route Management",
+  "Subscription Management",
+  "Payment System",
+  "Wallet System",
+  "Notification System",
+]);
+
 // Participant submits new bug
 const createBugSchema = z.object({
-  module: BugCategory,
+  module: BugCategoryLabel,
   bug_title: z.string().trim().min(1, "Bug title is required").max(100),
   steps_to_reproduce: z.string().trim().min(1).max(300),
   expected_behavior: z.string().trim().min(1).max(200),
@@ -46,8 +60,19 @@ const createBugSchema = z.object({
   is_confirming_duplicate: z.boolean().optional(),
 });
 
+// Human-readable status labels sent by the frontend
+const BugStatusLabel = z.enum([
+  "Pending Review",
+  "Validated",
+  "Rejected",
+  "Needs More Info",
+  "Duplicate",
+]);
+
 // Marshal or participant updates a bug (all optional, service enforces role-based field access)
 const marshalUpdateSchema = z.object({
+  // Status — quick actions in MarshalQueue send this
+  status: BugStatusLabel.optional().nullable(),
   // Participant-writable
   bug_title: z.string().trim().min(1).max(100).optional(),
   steps_to_reproduce: z.string().trim().min(1).max(300).optional(),

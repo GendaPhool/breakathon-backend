@@ -85,4 +85,51 @@ async function sendRegistrationConfirmation({ name, email }) {
   console.log(`[email] Confirmation sent to ${email}`);
 }
 
-module.exports = { sendRegistrationConfirmation };
+async function sendVerificationApprovedEmail({ name, email, participant_id }) {
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.warn("[email] SMTP not configured — skipping verification email for", email);
+    return;
+  }
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  await transporter.sendMail({
+    from,
+    to: email,
+    subject: "You're Verified! — Genda Phool Break-A-Thon ✅",
+    text: [
+      `Hi ${name},`,
+      "",
+      "Great news — your payment has been verified and your registration is confirmed!",
+      "",
+      `Your Participant ID is: ${participant_id}`,
+      "",
+      "You can now log in to the Break-A-Thon portal using your registered email",
+      "and phone number. On event day, visit the check-in desk so a marshal can",
+      "check you in — after that you'll be able to submit bug reports.",
+      "",
+      "See you at the Break-A-Thon!",
+      "— Genda Phool Break-A-Thon Team",
+    ].join("\n"),
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1a1a1a;">
+        <h2 style="color:#1e3a5f;margin-bottom:4px;">Genda Phool Break-A-Thon 🐛</h2>
+        <p style="color:#555;font-size:14px;margin-top:0;">You're Verified ✅</p>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;">
+        <p>Hi <strong>${name}</strong>,</p>
+        <p>Great news — your payment has been verified and your registration is confirmed!</p>
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:16px 0;">
+          <p style="margin:0;font-weight:600;color:#15803d;">Your Participant ID</p>
+          <p style="margin:6px 0 0;font-size:20px;font-weight:700;color:#166534;">${participant_id}</p>
+        </div>
+        <p>You can now log in to the Break-A-Thon portal using your registered email and phone number.</p>
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px;margin:16px 0;font-size:13px;color:#1e40af;">
+          On event day, visit the check-in desk so a marshal can check you in — after that you'll be able to submit bug reports.
+        </div>
+        <p style="font-size:12px;color:#9ca3af;margin-top:24px;">— Genda Phool Break-A-Thon Team</p>
+      </div>
+    `,
+  });
+  console.log(`[email] Verification approval sent to ${email}`);
+}
+
+module.exports = { sendRegistrationConfirmation, sendVerificationApprovedEmail };
