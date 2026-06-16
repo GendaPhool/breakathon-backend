@@ -285,29 +285,38 @@ router.get("/entities/User/me", async (req, res) => {
 // SDK expects raw array for list, raw object for create/update
 // =============================================================
 
-const settingsToFrontend = (row) => {
+const settingsToFrontend = (row, extra = {}) => {
   if (!row) return null;
   return {
-    id:                row.id,
-    event_name:        row.event_name,
-    event_date:        row.event_date        ?? "",
-    event_time:        row.event_time        ?? "",
-    venue:             row.venue             ?? "",
-    upi_id:            row.upi_id            ?? "",
-    upi_qr_url:        row.upi_qr_url        ?? "",
-    registration_open: row.registration_open,
-    event_started:     row.event_started,
-    created_date:      row.createdAt?.toISOString?.() ?? row.createdAt ?? null,
-    updated_date:      row.updatedAt?.toISOString?.() ?? row.updatedAt ?? null,
+    id:                    row.id,
+    event_name:            row.event_name,
+    event_description:     row.event_description     ?? "",
+    event_date:            row.event_date             ?? "",
+    event_time:            row.event_time             ?? "",
+    venue:                 row.venue                  ?? "",
+    registration_fee:      row.registration_fee       ?? 149,
+    registration_deadline: row.registration_deadline  ?? "",
+    max_participants:      row.max_participants        ?? null,
+    event_banner:          row.event_banner            ?? "",
+    upi_id:                row.upi_id                  ?? "",
+    upi_qr_url:            row.upi_qr_url              ?? "",
+    registration_open:     row.registration_open,
+    event_started:         row.event_started,
+    event_ended:           row.event_ended             ?? false,
+    leaderboard_visible:   row.leaderboard_visible     !== false,
+    created_date:          row.createdAt?.toISOString?.() ?? row.createdAt ?? null,
+    updated_date:          row.updatedAt?.toISOString?.() ?? row.updatedAt ?? null,
+    ...extra,
   };
 };
 
 // LIST — AdminSettings calls EventSettings.list() → picks [0]
-// Must return raw array, NOT wrapped in sendSuccess
+// Includes current_participants count so PublicRegister can enforce max limit.
 router.get("/entities/EventSettings", async (_req, res, next) => {
   try {
     const settings = await eventsettingsService.getSettings();
-    return res.status(200).json(settings ? [settingsToFrontend(settings)] : []);
+    const current_participants = await prisma.registration.count();
+    return res.status(200).json(settings ? [settingsToFrontend(settings, { current_participants })] : []);
   } catch (err) {
     next(err);
   }

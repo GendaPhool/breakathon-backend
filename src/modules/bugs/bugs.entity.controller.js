@@ -182,7 +182,7 @@ const listBugReports = async (req, res) => {
   // If the caller is a PARTICIPANT, force the participant_id filter to their
   // own Registration participant_id (looked up via their User record).
   // This prevents a participant from listing all other participants' reports.
-  if (req.user && req.user.role !== "MARSHAL") {
+  if (req.user && req.user.role !== "MARSHAL" && req.user.role !== "marshal") {
     // Find the checked-in Registration that belongs to this user's email
     const reg = await prisma.registration.findFirst({
       where: { email: req.user.email, checked_in: true },
@@ -235,11 +235,24 @@ const createBugReport = async (req, res) => {
 // PUT/PATCH /entities/BugReport/:id
 // ============================================================
 
+const SEVERITY_POINTS = {
+  LAUNCH_BLOCKER: 15,
+  CRITICAL:       10,
+  HIGH:            7,
+  MEDIUM:          4,
+  LOW:             1,
+};
+
 const updateBugReport = async (req, res) => {
   const { id } = req.params;
   const data   = toDb(req.body);
 
-  // Auto-set points for status changes (mirrors bugs.service.js logic)
+  // Auto-calc points from severity when no explicit override is sent
+  if (data.severity && data.points_awarded === undefined) {
+    data.points_awarded = SEVERITY_POINTS[data.severity] ?? 0;
+  }
+
+  // Auto-set points for status changes
   if (data.status === "DUPLICATE" && data.points_awarded === undefined) data.points_awarded = 0.5;
   if (data.status === "REJECTED"  && data.points_awarded === undefined) data.points_awarded = 0;
 

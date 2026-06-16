@@ -119,17 +119,24 @@ model BugReport {
 }
 
 model EventSettings {
-  id                String   @id @default(cuid())
-  event_name        String   @default("Genda Phool Break-A-Thon")
-  event_date        String?
-  event_time        String?
-  venue             String?
-  upi_id            String?
-  upi_qr_url        String?
-  registration_open Boolean  @default(true)
-  event_started     Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  event_name            String   @default("Genda Phool Break-A-Thon")
+  event_description     String?
+  event_date            String?
+  event_time            String?
+  venue                 String?
+  registration_fee      Int      @default(149)
+  registration_deadline String?
+  max_participants      Int?
+  event_banner          String?
+  upi_id                String?
+  upi_qr_url            String?
+  registration_open     Boolean  @default(true)
+  event_started         Boolean  @default(false)
+  event_ended           Boolean  @default(false)
+  leaderboard_visible   Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   @@map("event_settings")
 }

@@ -69,6 +69,15 @@ const BugStatusLabel = z.enum([
   "Duplicate",
 ]);
 
+// Human-readable severity labels sent by the frontend (BugDetailPanel sends these)
+const BugSeverityLabel = z.enum([
+  "Launch Blocker",
+  "Critical",
+  "High",
+  "Medium",
+  "Low",
+]);
+
 // Marshal or participant updates a bug (all optional, service enforces role-based field access)
 const marshalUpdateSchema = z.object({
   // Status — quick actions in MarshalQueue send this
@@ -79,8 +88,8 @@ const marshalUpdateSchema = z.object({
   expected_behavior: z.string().trim().min(1).max(200).optional(),
   actual_behavior: z.string().trim().min(1).max(200).optional(),
   screen_recording_url: z.string().url().optional().or(z.literal("")).nullable(),
-  // Marshal-writable
-  severity: BugSeverity.optional().nullable(),
+  // Marshal-writable — frontend sends human-readable labels ("Launch Blocker" etc.)
+  severity: BugSeverityLabel.optional().nullable(),
   points_awarded: z.number().min(0).optional(),
   marshal_notes: z.string().optional().nullable(),
   duplicate_of: z.string().optional().nullable(),
