@@ -6,6 +6,50 @@
 
 const prisma = require("../../config/db");
 
+// Single hardcoded code that allows registering without a real Razorpay payment.
+// Anything else must be a real, captured Razorpay payment_id verified against their API.
+const FREE_ACCESS_CODE = "gpbreakuserfree123";
+const RAZORPAY_PAYMENT_ID_PATTERN = /^pay_[A-Za-z0-9]{10,}$/;
+
+/**
+ * Confirms payment_reference is either the hardcoded free-access code, or a real
+ * Razorpay payment that actually succeeded — fetched live from Razorpay's API.
+ * This blocks anyone from typing a random string (or a plausible-looking fake
+ * "pay_..." string) directly into the registration form/API and getting in for free.
+ */
+const verifyPaymentReference = async (rawReference) => {
+  const reference = (rawReference || "").trim();
+
+  if (reference === FREE_ACCESS_CODE) {
+    return { valid: true };
+  }
+
+  if (!RAZORPAY_PAYMENT_ID_PATTERN.test(reference)) {
+    return { valid: false };
+  }
+
+  const keyId     = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  if (!keyId || !keySecret) {
+    return { valid: false };
+  }
+
+  const credentials = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+  const res = await fetch(`https://api.razorpay.com/v1/payments/${reference}`, {
+    headers: { Authorization: `Basic ${credentials}` },
+  });
+
+  if (!res.ok) return { valid: false };
+
+  const payment = await res.json();
+  const validStatuses = ["captured", "authorized"];
+  if (!validStatuses.includes(payment.status)) {
+    return { valid: false };
+  }
+
+  return { valid: true };
+};
+
 const regSelect = {
   id: true,
   name: true,
@@ -56,6 +100,14 @@ const createPublicRegistration = async (data) => {
     const err = new Error("EMAIL_EXISTS");
     err.statusCode = 409;
     err.clientMessage = "An account with this email is already registered.";
+    throw err;
+  }
+
+  const { valid } = await verifyPaymentReference(data.payment_reference);
+  if (!valid) {
+    const err = new Error("INVALID_PAYMENT_ID");
+    err.statusCode = 400;
+    err.clientMessage = "Invalid Payment ID. Please complete payment via Razorpay, or contact support.";
     throw err;
   }
 

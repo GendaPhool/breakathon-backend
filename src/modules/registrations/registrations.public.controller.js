@@ -36,6 +36,9 @@ const createRegistration = async (req, res) => {
     if (err.message === "EMAIL_EXISTS") {
       return sendError(res, err.clientMessage || "Email already registered.", 409);
     }
+    if (err.message === "INVALID_PAYMENT_ID") {
+      return sendError(res, err.clientMessage || "Invalid Payment ID.", 400);
+    }
     throw err; // let errorHandler catch unexpected errors
   }
 };
