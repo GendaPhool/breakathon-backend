@@ -16,6 +16,12 @@ const { notFoundHandler, errorHandler } = require("./middleware/errorHandler");
 
 const app = express();
 
+// Behind nginx (reverse proxy): trust X-Forwarded-Proto so req.protocol reports
+// "https" correctly in production instead of always "http". Without this,
+// generated file_url values (uploads) get saved as http:// on an https:// site,
+// which browsers silently block as mixed content — images never render.
+app.set("trust proxy", 1);
+
 // ── Security ─────────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({
